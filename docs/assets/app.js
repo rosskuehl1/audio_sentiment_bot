@@ -8,6 +8,8 @@ const defaultLiveTranscript = "Transcript snippets appear here as you speak.";
 const LIVE_ANALYSIS_INTERVAL_SECONDS = 3;
 const LIVE_ANALYSIS_WINDOW_SECONDS = 8;
 const LIVE_ANALYSIS_OVERLAP_SECONDS = 1;
+const HISTORY_STORAGE_KEY = "audio-sentiment-history";
+const HISTORY_LIMIT = 8;
 
 const form = document.querySelector("[data-form]");
 const fileInput = form ? form.querySelector('[data-input="audio"]') : null;
@@ -37,6 +39,7 @@ const liveEnergyEl = document.querySelector('[data-live-energy]');
 const liveConfidenceEl = document.querySelector('[data-live-confidence]');
 const liveTrendLabelEl = document.querySelector('[data-live-trend-label]');
 const liveTrendCanvas = document.querySelector('[data-live-trend]');
+const historyClearButton = document.querySelector('[data-clear-history]');
 
 const state = {
   audioBuffer: null,
@@ -60,6 +63,8 @@ const state = {
   trendHistory: [],
   ciStatusFetched: false,
 };
+
+let historyStorageAvailable = null;
 
 env.allowRemoteModels = true;
 env.useBrowserCache = true;
@@ -140,6 +145,123 @@ function ensureEmptyState() {
   }
   const hasResults = resultsEl && resultsEl.childElementCount > 0;
   emptyStateEl.hidden = Boolean(hasResults);
+  if (historyClearButton) {
+    historyClearButton.disabled = !hasResults;
+  }
+}
+
+function hasHistoryStorage() {
+  if (historyStorageAvailable != null) {
+    return historyStorageAvailable;
+  }
+  if (typeof window === "undefined" || !window.localStorage) {
+    historyStorageAvailable = false;
+    return historyStorageAvailable;
+  }
+  try {
+    const probeKey = "__audio_history_test__";
+    window.localStorage.setItem(probeKey, "1");
+    window.localStorage.removeItem(probeKey);
+    historyStorageAvailable = true;
+  } catch (error) {
+    console.warn("Local storage unavailable", error);
+    historyStorageAvailable = false;
+  }
+  return historyStorageAvailable;
+}
+
+function sanitizeSentiment(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+  const label = typeof entry.label === "string" ? entry.label : "UNKNOWN";
+  const score = typeof entry.score === "number" ? entry.score : null;
+  return score == null ? { label } : { label, score };
+}
+
+function sanitizeHistoryEntry(entry) {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+  const timestamp = typeof entry.timestamp === "string" ? entry.timestamp : new Date().toISOString();
+  return {
+    transcript: typeof entry.transcript === "string" ? entry.transcript : "",
+    sentiment: sanitizeSentiment(entry.sentiment),
+    error: typeof entry.error === "string" ? entry.error : "",
+    fileName: typeof entry.fileName === "string" && entry.fileName ? entry.fileName : "Audio clip",
+    timestamp,
+  };
+}
+
+function readStoredHistory() {
+  if (!hasHistoryStorage()) {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((entry) => sanitizeHistoryEntry(entry)).filter(Boolean);
+  } catch (error) {
+    console.warn("History read failed", error);
+    return [];
+  }
+}
+
+function writeStoredHistory(entries) {
+  if (!hasHistoryStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(entries));
+  } catch (error) {
+    console.warn("History write failed", error);
+  }
+}
+
+function persistHistoryEntry(entry) {
+  const sanitized = sanitizeHistoryEntry(entry);
+  if (!sanitized) {
+    return;
+  }
+  const history = readStoredHistory();
+  history.unshift(sanitized);
+  writeStoredHistory(history.slice(0, HISTORY_LIMIT));
+}
+
+function clearStoredHistory() {
+  if (!hasHistoryStorage()) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(HISTORY_STORAGE_KEY);
+  } catch (error) {
+    console.warn("History clear failed", error);
+  }
+}
+
+function hydrateHistoryFromStorage() {
+  const entries = readStoredHistory();
+  if (!entries.length) {
+    ensureEmptyState();
+    return;
+  }
+  entries.slice().reverse().forEach((entry) => {
+    insertResultCard(entry, { append: true, autofocus: false });
+  });
+}
+
+function clearHistoryList() {
+  if (resultsEl) {
+    resultsEl.innerHTML = "";
+  }
+  clearStoredHistory();
+  ensureEmptyState();
 }
 
 function getAudioContext() {
@@ -991,7 +1113,7 @@ function applyInstrumentModeSettings(stream) {
   });
 }
 
-function buildResultCard(payload) {
+function buildResultCard(payload, options = {}) {
   const sentiment = payload.sentiment || null;
   const label = sentiment && sentiment.label ? sentiment.label : "UNKNOWN";
   const tone = toneFromLabel(label);
@@ -999,6 +1121,8 @@ function buildResultCard(payload) {
   const transcript = typeof payload.transcript === "string" ? payload.transcript : "";
   const note = payload.error || "";
   const fileName = payload.fileName || "Audio clip";
+  const timestamp = payload.timestamp ? new Date(payload.timestamp) : new Date();
+  const timestampValid = Number.isFinite(timestamp.getTime());
 
   const article = document.createElement("article");
   article.className = "result-card";
@@ -1023,8 +1147,11 @@ function buildResultCard(payload) {
 
   const meta = document.createElement("p");
   meta.className = "result-card__meta";
-  const now = new Date();
-  meta.textContent = `${fileName} | ${now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  const metaParts = [fileName];
+  if (timestampValid) {
+    metaParts.push(timestamp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+  }
+  meta.textContent = metaParts.join(" | ");
   article.appendChild(meta);
 
   const transcriptBlock = document.createElement("p");
@@ -1039,18 +1166,34 @@ function buildResultCard(payload) {
     article.appendChild(noteBlock);
   }
 
-  requestAnimationFrame(() => {
-    try {
-      article.focus();
-    } catch (err) {
-      console.warn("Result focus failed", err);
-    }
-    article.addEventListener("blur", () => {
-      article.removeAttribute("tabindex");
-    }, { once: true });
-  });
+  if (options.autofocus !== false) {
+    requestAnimationFrame(() => {
+      try {
+        article.focus();
+      } catch (err) {
+        console.warn("Result focus failed", err);
+      }
+      article.addEventListener("blur", () => {
+        article.removeAttribute("tabindex");
+      }, { once: true });
+    });
+  }
 
   return article;
+}
+
+function insertResultCard(payload, options = {}) {
+  if (!resultsEl) {
+    return null;
+  }
+  const card = buildResultCard(payload, options);
+  if (options.append) {
+    resultsEl.appendChild(card);
+  } else {
+    resultsEl.prepend(card);
+  }
+  ensureEmptyState();
+  return card;
 }
 
 async function ensurePipelines() {
@@ -1237,11 +1380,9 @@ async function performAnalysis(options = {}) {
       audioBuffer: state.audioBuffer,
       sourceLabel: state.audioSourceLabel || (file ? file.name : null),
     });
-    if (resultsEl) {
-      const card = buildResultCard(result);
-      resultsEl.prepend(card);
-    }
-    ensureEmptyState();
+    const timestampedResult = { ...result, timestamp: new Date().toISOString() };
+    insertResultCard(timestampedResult);
+    persistHistoryEntry(timestampedResult);
 
     if (result.error && !result.sentiment) {
       setStatus(result.error, "warn");
@@ -1332,9 +1473,16 @@ if (instrumentModeSelect) {
   setInstrumentMode("voice");
 }
 
+if (historyClearButton) {
+  historyClearButton.addEventListener("click", () => {
+    clearHistoryList();
+  });
+}
+
 fetchCiStatus();
 
 setRecordingStatus("Idle. Microphone access stays local to this tab.");
 clearWaveform();
+hydrateHistoryFromStorage();
 ensureEmptyState();
 resetLiveCard();

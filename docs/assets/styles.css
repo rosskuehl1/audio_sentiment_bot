@@ -470,7 +470,14 @@ body {
 
 .history-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.history-header__meta {
+  display: grid;
   gap: 6px;
 }
 
@@ -484,6 +491,11 @@ body {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.history-header__clear {
+  align-self: flex-start;
+  font-size: 0.85rem;
 }
 
 .history-list {

@@ -18,6 +18,7 @@ Audio Sentiment Bot is now a zero-backend, browser-first experience. The app run
 - **Realtime streaming** – Watch the live sentiment gauge update every few seconds while you speak; recordings are optional.
 - **Modern models** – Speech recognition uses Whisper Tiny (quantized) via `@xenova/transformers`. Sentiment scores come from DistilBERT, also loaded on-demand in the browser.
 - **Same polished UI** – Waveform preview, accessible status messaging, and analysis history remain intact.
+- **Sticky history** – Analyses persist locally between sessions so you can compare takes later, with a one-click clear control in the history panel.
 - **English-only focus** – Scope is intentionally narrowed to English to keep downloads reasonable and latency low.
 
 ## Quick start

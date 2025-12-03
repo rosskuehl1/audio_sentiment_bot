@@ -27,4 +27,33 @@ test.describe("Audio Sentiment Bot", () => {
     const ciText = (await ciStatus.textContent())?.trim() || "";
     expect(ciText.length).toBeGreaterThan(0);
   });
+
+  test("restores and clears persisted history", async ({ page }) => {
+    const storedEntries = [
+      {
+        transcript: "Stored riff feels uplifting",
+        sentiment: { label: "POSITIVE", score: 0.91 },
+        fileName: "Stored clip",
+        timestamp: "2025-01-01T12:00:00.000Z",
+        error: "",
+      },
+    ];
+    await page.addInitScript((entries) => {
+      window.localStorage.setItem("audio-sentiment-history", JSON.stringify(entries));
+    }, storedEntries);
+
+    await page.goto("/");
+
+    const historyCards = page.locator(".result-card");
+    await expect(historyCards).toHaveCount(storedEntries.length);
+    await expect(historyCards.first()).toContainText("Stored clip");
+
+    const clearButton = page.locator("[data-clear-history]");
+    await expect(clearButton).toBeEnabled();
+    await clearButton.click();
+
+    await expect(historyCards).toHaveCount(0);
+    await expect(page.locator("[data-empty-state]")).toBeVisible();
+    await expect(clearButton).toBeDisabled();
+  });
 });

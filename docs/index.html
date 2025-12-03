@@ -143,8 +143,13 @@
 
           <section class="panel" aria-labelledby="history-heading">
             <div class="history-header">
-              <h2 class="history-header__title" id="history-heading">Analysis history</h2>
-              <p class="history-header__copy">Each result lists the timestamp, transcript, and sentiment score.</p>
+              <div class="history-header__meta">
+                <h2 class="history-header__title" id="history-heading">Analysis history</h2>
+                <p class="history-header__copy">Each result lists the timestamp, transcript, and sentiment score.</p>
+              </div>
+              <button class="button button--ghost history-header__clear" type="button" data-clear-history disabled>
+                Clear history
+              </button>
             </div>
 
             <div class="history-list" data-results aria-live="polite"></div>
