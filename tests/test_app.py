@@ -9,6 +9,23 @@ def _make_client(transcribe_fn, classify_fn):
     return app.test_client()
 
 
+def test_options_preflight_respects_configured_origin():
+    def fake_transcribe(_audio_bytes, language="en-US"):
+        return ""
+
+    app = create_app(transcribe_fn=fake_transcribe, classify_fn=lambda *_a, **_k: None)
+    app.config.update(TESTING=True, CORS_ORIGIN="https://example.com")
+    client = app.test_client()
+
+    response = client.options("/analyze", headers={"Origin": "https://irrelevant"})
+
+    assert response.status_code == 204
+    assert response.headers["Access-Control-Allow-Origin"] == "https://example.com"
+    assert "POST" in response.headers["Access-Control-Allow-Methods"]
+    assert "Content-Type" in response.headers["Access-Control-Allow-Headers"]
+    assert "Origin" in response.headers.get("Vary", "")
+
+
 def test_missing_audio_returns_400():
     client = _make_client(lambda *_args, **_kwargs: "", lambda *_args, **_kwargs: None)
     response = client.post("/analyze")

@@ -58,6 +58,28 @@
             </form>
 
             <p class="status-banner" data-status role="status" aria-live="polite">Ready.</p>
+
+            <div class="waveform-card" data-waveform-container hidden>
+              <div class="waveform-card__header">
+                <h3 class="waveform-card__title" id="waveform-heading">Waveform preview</h3>
+                <button class="button button--ghost" type="button" data-waveform-clear>
+                  Clear preview
+                </button>
+              </div>
+              <p class="waveform-card__copy">
+                Live visualization of your audio file. We never upload this preview.
+              </p>
+              <canvas
+                class="waveform-canvas"
+                data-waveform
+                role="img"
+                aria-labelledby="waveform-heading"
+              ></canvas>
+              <p class="waveform-meta" data-waveform-meta></p>
+            </div>
+            <p class="waveform-empty" data-waveform-empty>
+              Waveform preview appears after selecting an audio file.
+            </p>
           </section>
 
           <section class="panel" aria-labelledby="history-heading">

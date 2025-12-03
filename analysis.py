@@ -1,6 +1,6 @@
 """Shared transcription and sentiment helpers."""
 import io
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import speech_recognition as sr
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -45,4 +45,18 @@ def analyze_audio_file(file_path: str, language: str = "en-US") -> Tuple[str, Op
 
     transcript = transcribe_audio_bytes(audio_bytes, language=language)
     sentiment = classify_sentiment(transcript)
+    return transcript, sentiment
+
+
+def analyze_audio_bytes(
+    audio_bytes: bytes,
+    *,
+    language: str = "en-US",
+    transcribe_fn: Callable[[bytes, str], str] = transcribe_audio_bytes,
+    classify_fn: Callable[[str], Optional[dict]] = classify_sentiment,
+) -> Tuple[str, Optional[dict]]:
+    """Run transcription and sentiment classification directly on audio bytes."""
+
+    transcript = transcribe_fn(audio_bytes, language=language)
+    sentiment = classify_fn(transcript) if transcript else None
     return transcript, sentiment

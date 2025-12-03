@@ -12,11 +12,187 @@
   const statusEl = document.querySelector('[data-status]');
   const resultsEl = document.querySelector('[data-results]');
   const emptyStateEl = document.querySelector('[data-empty-state]');
+  const waveformCanvas = document.querySelector('[data-waveform]');
+  const waveformContainer = document.querySelector('[data-waveform-container]');
+  const waveformEmpty = document.querySelector('[data-waveform-empty]');
+  const waveformMeta = document.querySelector('[data-waveform-meta]');
+  const waveformClearButton = document.querySelector('[data-waveform-clear]');
 
   if (!fileInput) {
     return;
   }
 
+  const defaultWaveformMessage = "Waveform preview appears after selecting an audio file.";
+  let audioContext = null;
+
+  const getAudioContext = () => {
+    if (audioContext) {
+      return audioContext;
+    }
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextConstructor) {
+      return null;
+    }
+    audioContext = new AudioContextConstructor();
+    return audioContext;
+  };
+
+  const clearWaveform = (message) => {
+    if (!waveformCanvas) {
+      return;
+    }
+    const context = waveformCanvas.getContext("2d");
+    if (context) {
+      context.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+    }
+    if (waveformContainer) {
+      waveformContainer.hidden = true;
+    }
+    if (waveformMeta) {
+      waveformMeta.textContent = "";
+    }
+    if (waveformEmpty) {
+      waveformEmpty.hidden = false;
+      waveformEmpty.textContent = message || defaultWaveformMessage;
+    }
+  };
+
+  const decodeBuffer = (context, arrayBuffer) => {
+    if (!context) {
+      return Promise.reject(new Error("Web Audio API not available."));
+    }
+    const bufferCopy = arrayBuffer.slice(0);
+    if (context.decodeAudioData.length === 1) {
+      return context.decodeAudioData(bufferCopy);
+    }
+    return new Promise((resolve, reject) => {
+      context.decodeAudioData(bufferCopy, resolve, reject);
+    });
+  };
+
+  const drawWaveform = (audioBuffer) => {
+    if (!waveformCanvas) {
+      return;
+    }
+
+    const parentWidth = waveformCanvas.parentElement ? waveformCanvas.parentElement.clientWidth : 0;
+    const width = waveformCanvas.clientWidth || parentWidth || 640;
+    const height = waveformCanvas.clientHeight || 160;
+    const ratio = window.devicePixelRatio || 1;
+
+    waveformCanvas.width = width * ratio;
+    waveformCanvas.height = height * ratio;
+
+    const context = waveformCanvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    context.save();
+    context.scale(ratio, ratio);
+    context.clearRect(0, 0, width, height);
+
+    const channelData = audioBuffer.getChannelData(0);
+    const samples = width;
+    const blockSize = Math.max(1, Math.floor(channelData.length / samples));
+    const midY = height / 2;
+
+    context.lineWidth = 1.2;
+    context.strokeStyle = "rgba(37, 99, 235, 0.9)";
+    context.beginPath();
+    context.moveTo(0, midY);
+
+    for (let i = 0; i < samples; i += 1) {
+      let min = 1.0;
+      let max = -1.0;
+      const start = i * blockSize;
+      for (let j = 0; j < blockSize; j += 1) {
+        const datum = channelData[start + j];
+        if (datum === undefined) {
+          break;
+        }
+        if (datum < min) {
+          min = datum;
+        }
+        if (datum > max) {
+          max = datum;
+        }
+      }
+      context.lineTo(i, midY + max * midY);
+      context.lineTo(i, midY + min * midY);
+    }
+
+    context.lineTo(samples, midY);
+    context.stroke();
+    context.restore();
+  };
+
+  const renderWaveform = async (file) => {
+    if (!waveformCanvas || !file) {
+      return;
+    }
+
+    const context = getAudioContext();
+    if (!context) {
+      clearWaveform("Waveform preview not supported in this browser.");
+      return;
+    }
+
+    try {
+      if (context.state === "suspended") {
+        await context.resume();
+      }
+
+      const buffer = await file.arrayBuffer();
+
+      if (waveformContainer) {
+        waveformContainer.hidden = false;
+      }
+      if (waveformEmpty) {
+        waveformEmpty.hidden = true;
+      }
+
+      const audioBuffer = await decodeBuffer(context, buffer);
+
+      drawWaveform(audioBuffer);
+      if (waveformMeta) {
+        const duration = audioBuffer.duration;
+        const durationLabel = Number.isFinite(duration)
+          ? `${duration.toFixed(2)}s`
+          : "Unknown duration";
+        const sampleRate = audioBuffer.sampleRate
+          ? `${audioBuffer.sampleRate.toLocaleString()} Hz`
+          : "Unknown sample rate";
+        const sizeKb = file.size ? `${(file.size / 1024).toFixed(1)} KB` : "";
+        const metaParts = [durationLabel, sampleRate, sizeKb].filter(Boolean);
+        waveformMeta.textContent = metaParts.join(" · ");
+      }
+    } catch (error) {
+      console.error("Waveform preview failed", error);
+      clearWaveform("Could not render waveform preview for this file.");
+    }
+  };
+
+  clearWaveform();
+
+  fileInput.addEventListener("change", (event) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      clearWaveform();
+      return;
+    }
+    const selectedFile = files[0];
+    renderWaveform(selectedFile);
+  });
+
+  if (waveformClearButton) {
+    waveformClearButton.addEventListener("click", () => {
+      clearWaveform();
+      if (fileInput) {
+        fileInput.value = "";
+      }
+    });
+  }
   const setStatus = (message, state) => {
     const tone = state || "ready";
     if (statusEl) {

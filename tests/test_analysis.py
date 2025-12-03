@@ -78,6 +78,30 @@ def test_classify_sentiment_returns_none_for_empty():
     assert analysis.classify_sentiment(None) is None
 
 
+def test_analyze_audio_bytes_uses_injected_functions():
+    calls = {"transcribe": None, "classify": None}
+
+    def fake_transcribe(data, language="en-US"):
+        calls["transcribe"] = (data, language)
+        return "bonjour"
+
+    def fake_classify(text):
+        calls["classify"] = text
+        return {"label": "NEUTRAL", "score": 0.8}
+
+    transcript, sentiment = analysis.analyze_audio_bytes(
+        b"bytes",
+        language="fr-FR",
+        transcribe_fn=fake_transcribe,
+        classify_fn=fake_classify,
+    )
+
+    assert transcript == "bonjour"
+    assert sentiment == {"label": "NEUTRAL", "score": 0.8}
+    assert calls["transcribe"] == (b"bytes", "fr-FR")
+    assert calls["classify"] == "bonjour"
+
+
 def test_analyze_audio_file_delegates(tmp_path, monkeypatch):
     audio_path = tmp_path / "clip.wav"
     audio_path.write_bytes(b"binary")

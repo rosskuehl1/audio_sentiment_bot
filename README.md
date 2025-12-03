@@ -5,6 +5,7 @@ Audio Sentiment Bot transcribes short audio clips with Google Web Speech and sco
 ## Features
 
 - **Responsive Web UI**: Mobile-first interface with analysis history and keyboard-friendly workflow
+- **Waveform Preview**: Visualize audio files instantly in the browser before uploading
 - **Audio Transcription**: Converts WAV/MP3 audio files to text using Google Web Speech API
 - **Sentiment Analysis**: Analyzes sentiment (POSITIVE, NEGATIVE, or NEUTRAL) using VADER sentiment analyzer
 - **REST API**: Simple Flask endpoint for audio file uploads
@@ -48,6 +49,7 @@ python app.py
 
 Highlights:
 - Upload a clip, pick a language, and review the transcript and sentiment history without leaving the page
+- See a live waveform preview (rendered locally via the Web Audio API) before you analyze a file
 - Works great on phones, tablets, and desktops
 - Keeps results client-side; only the audio file you upload leaves the device
 
@@ -103,6 +105,29 @@ Upload an audio file for transcription and sentiment analysis.
 ```bash
 curl -X POST -F "audio=@positive.wav" http://localhost:6142/analyze
 ```
+
+### Cross-Origin Hosting
+
+When serving the web UI from GitHub Pages (or any other origin), set the environment variable `AUDIO_SENTIMENT_BOT_CORS_ORIGIN` before starting the Flask server so the API whitelists your frontend domain:
+
+```bash
+export AUDIO_SENTIMENT_BOT_CORS_ORIGIN="https://rosskuehl1.github.io"
+python app.py
+```
+
+The `/analyze` endpoint responds to `OPTIONS` preflight requests and exposes `Content-Type` and `Accept` headers for multipart uploads by default.
+
+### GitHub Pages Frontend
+
+The repository `rosskuehl1.github.io` hosts a static copy of the web UI for GitHub Pages. It reuses the markup and styles from this project and posts to whatever API base you configure on the page.
+
+To sync UI changes:
+
+1. Update the templates or static assets in this project as usual.
+2. Copy the changes into `rosskuehl1.github.io` (`index.html`, `assets/app.js`, `assets/styles.css`). Replace any `{{ url_for(...) }}` calls with relative paths.
+3. Test locally with `python -m http.server` from inside the Pages repo while your Flask backend is running.
+4. Verify the waveform preview and API endpoint selector still work.
+5. Commit and push to `main` in the Pages repo. GitHub Pages redeploys automatically.
 
 ### Live Microphone Streaming
 

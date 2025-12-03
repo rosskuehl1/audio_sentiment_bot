@@ -1,5 +1,7 @@
 """Flask application exposing the audio sentiment analysis API and UI."""
 
+import os
+
 from flask import Flask, current_app, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
 
@@ -24,6 +26,21 @@ def _normalize_language(raw_value: str | None) -> str:
     return cleaned if cleaned in _LANGUAGE_CODES else DEFAULT_LANGUAGE
 
 
+ALLOWED_HEADERS = "Content-Type, Accept"
+ALLOWED_METHODS = "POST, OPTIONS"
+
+
+def _set_vary_header(response, header_value: str) -> None:
+    """Ensure the Vary header includes the provided value."""
+
+    existing = response.headers.get("Vary")
+    if existing:
+        if header_value not in {part.strip() for part in existing.split(",")}:
+            response.headers["Vary"] = f"{existing}, {header_value}"
+    else:
+        response.headers["Vary"] = header_value
+
+
 def create_app(
     transcribe_fn=transcribe_audio_bytes,
     classify_fn=classify_sentiment,
@@ -33,10 +50,28 @@ def create_app(
     app = Flask(__name__)
     app.config[TRANSCRIBE_KEY] = transcribe_fn
     app.config[CLASSIFY_KEY] = classify_fn
+    app.config.setdefault(
+        "CORS_ORIGIN",
+        os.environ.get("AUDIO_SENTIMENT_BOT_CORS_ORIGIN", "*"),
+    )
 
-    @app.route("/analyze", methods=["POST"])
+    @app.after_request
+    def _apply_cors_headers(response):
+        origin = current_app.config.get("CORS_ORIGIN")
+        if origin:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Headers"] = ALLOWED_HEADERS
+            response.headers["Access-Control-Allow-Methods"] = ALLOWED_METHODS
+            if origin != "*":
+                _set_vary_header(response, "Origin")
+        return response
+
+    @app.route("/analyze", methods=["POST", "OPTIONS"])
     def analyze() -> ResponseReturnValue:
         """Accept multipart audio uploads and return transcript plus sentiment."""
+
+        if request.method == "OPTIONS":
+            return ("", 204)
 
         transcribe = current_app.config[TRANSCRIBE_KEY]
         classify = current_app.config[CLASSIFY_KEY]
