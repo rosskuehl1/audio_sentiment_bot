@@ -405,3 +405,12 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+.form-grid.is-uploading {
+  opacity: 0.6;
+}
+
+.result-card:focus {
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 4px;
+}
