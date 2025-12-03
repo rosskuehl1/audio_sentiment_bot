@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Audio Sentiment Bot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --border: #d6dbe6;
+      --text: #1f2933;
+      --muted: #5f6b7d;
+      --accent: #0057d9;
+      --positive: #128250;
+      --negative: #c23a2b;
+      --neutral: #2c3e50;
+      --warn: #8f5b00;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+      display: grid;
+      gap: 24px;
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 2rem;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    form {
+      display: grid;
+      gap: 16px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    label {
+      font-weight: 600;
+    }
+
+    input[type="file"],
+    select {
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fefefe;
+      font-size: 0.95rem;
+    }
+
+    button {
+      justify-self: start;
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #ffffff;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+      box-shadow: none;
+      transform: none;
+    }
+
+    button:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(0, 87, 217, 0.25);
+    }
+
+    .status {
+      margin: 0;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    .status.status--working {
+      color: var(--accent);
+    }
+
+    .status.status--error {
+      color: var(--negative);
+    }
+
+    .status.status--warn {
+      color: var(--warn);
+    }
+
+    .results {
+      display: grid;
+      gap: 18px;
+    }
+
+    .result {
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 20px 24px;
+      background: #ffffff;
+      position: relative;
+    }
+
+    .result::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      border-left: 6px solid transparent;
+    }
+
+    .result.is-positive::before {
+      border-left-color: var(--positive);
+    }
+
+    .result.is-negative::before {
+      border-left-color: var(--negative);
+    }
+
+    .result.is-neutral::before {
+      border-left-color: var(--neutral);
+    }
+
+    .result.is-unknown::before {
+      border-left-color: var(--muted);
+    }
+
+    .result__header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin-bottom: 8px;
+    }
+
+    .result__title {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .badge.positive {
+      background: var(--positive);
+    }
+
+    .badge.negative {
+      background: var(--negative);
+    }
+
+    .badge.neutral {
+      background: var(--neutral);
+    }
+
+    .badge.unknown {
+      background: var(--muted);
+    }
+
+    .result__meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .result__transcript {
+      margin: 12px 0 0;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .result__note {
+      margin: 12px 0 0;
+      color: var(--warn);
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    @media (max-width: 640px) {
+      main {
+        padding: 24px 16px 32px;
+      }
+
+      header h1 {
+        font-size: 1.65rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Audio Sentiment Bot</h1>
+      <p>Upload an audio clip to transcribe it with Google Speech and score its sentiment instantly.</p>
+    </header>
+
+    <section class="panel">
+      <form id="upload-form" enctype="multipart/form-data" novalidate>
+        <div class="field">
+          <label for="audio-input">Audio file</label>
+          <input id="audio-input" name="audio" type="file" accept="audio/*" required>
+        </div>
+        <div class="field">
+          <label for="language-select">Transcription language</label>
+          <select id="language-select" name="language">
+            <option value="en-US" selected>English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="es-ES">Spanish (Spain)</option>
+            <option value="fr-FR">French (France)</option>
+            <option value="de-DE">German</option>
+          </select>
+        </div>
+        <button type="submit">Analyze Audio</button>
+      </form>
+      <p id="status" class="status">Ready.</p>
+    </section>
+
+    <section class="panel">
+      <h2 style="margin-top: 0;">Analysis history</h2>
+      <div id="results" class="results" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("upload-form");
+    const fileInput = document.getElementById("audio-input");
+    const languageSelect = document.getElementById("language-select");
+    const statusEl = document.getElementById("status");
+    const resultsEl = document.getElementById("results");
+    const submitButton = form.querySelector("button[type='submit']");
+
+    const setStatus = (message, state = "ready") => {
+      statusEl.textContent = message;
+      statusEl.className = `status status--${state}`;
+    };
+
+    const formatScore = (value) => {
+      if (typeof value !== "number" || Number.isNaN(value)) {
+        return "--";
+      }
+      return value.toFixed(2);
+    };
+
+    const renderResult = (payload) => {
+      const sentiment = payload?.sentiment;
+      const label = sentiment?.label || "UNKNOWN";
+      const score = sentiment?.score;
+      const transcript = payload?.transcript || "";
+      const language = payload?.language || "en-US";
+      const note = payload?.error;
+
+      const article = document.createElement("article");
+      article.classList.add("result");
+      article.classList.add(
+        label === "POSITIVE"
+          ? "is-positive"
+          : label === "NEGATIVE"
+          ? "is-negative"
+          : label === "NEUTRAL"
+          ? "is-neutral"
+          : "is-unknown"
+      );
+
+      const header = document.createElement("div");
+      header.className = "result__header";
+
+      const title = document.createElement("h3");
+      title.className = "result__title";
+      title.textContent = label === "UNKNOWN" ? "No sentiment detected" : label;
+      header.appendChild(title);
+
+      const badge = document.createElement("span");
+      badge.classList.add("badge");
+      badge.classList.add(
+        label === "POSITIVE"
+          ? "positive"
+          : label === "NEGATIVE"
+          ? "negative"
+          : label === "NEUTRAL"
+          ? "neutral"
+          : "unknown"
+      );
+      badge.textContent = label === "UNKNOWN" ? "--" : `${label} · ${formatScore(score)}`;
+      header.appendChild(badge);
+
+      const meta = document.createElement("p");
+      meta.className = "result__meta";
+      const timestamp = new Date().toLocaleTimeString();
+      meta.textContent = `Language: ${language} · ${timestamp}`;
+
+      const transcriptBlock = document.createElement("p");
+      transcriptBlock.className = "result__transcript";
+      transcriptBlock.textContent = transcript || "No speech detected.";
+
+      article.appendChild(header);
+      article.appendChild(meta);
+      article.appendChild(transcriptBlock);
+
+      if (note && label === "UNKNOWN") {
+        const noteBlock = document.createElement("p");
+        noteBlock.className = "result__note";
+        noteBlock.textContent = note;
+        article.appendChild(noteBlock);
+      }
+
+      resultsEl.prepend(article);
+    };
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!fileInput.files || fileInput.files.length === 0) {
+        setStatus("Select an audio file before uploading.", "error");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("audio", fileInput.files[0]);
+      formData.append("language", languageSelect.value || "en-US");
+
+      setStatus("Analyzing audio…", "working");
+      submitButton.disabled = true;
+
+      try {
+        const response = await fetch("/analyze", {
+          method: "POST",
+          body: formData,
+        });
+
+        let payload = {};
+        try {
+          payload = await response.json();
+        } catch (jsonError) {
+          throw new Error("Unexpected server response.");
+        }
+
+        if (!response.ok) {
+          throw new Error(payload?.error || `Request failed (${response.status})`);
+        }
+
+        renderResult(payload);
+        if (payload?.error && !payload?.sentiment) {
+          setStatus(payload.error, "warn");
+        } else {
+          setStatus("Analysis complete.");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Request failed.";
+        setStatus(message, "error");
+      } finally {
+        submitButton.disabled = false;
+        fileInput.value = "";
+      }
+    });
+  </script>
+</body>
+</html>

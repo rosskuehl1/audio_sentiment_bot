@@ -36,6 +36,19 @@ pip install pyaudio
 
 ## Usage
 
+### Interactive UI Overlay
+
+Launch the desktop overlay to analyze local audio files or live microphone input:
+```bash
+python ui_overlay.py
+```
+
+Features:
+- Quick file picker for WAV/MP3/FLAC/AIFF audio
+- Start/stop microphone capture with real-time sentiment updates
+- Language selector for the Google Web Speech API
+- Color-coded transcript log for quick scanning
+
 ### Running the API Server
 
 Start the Flask server:
@@ -95,6 +108,16 @@ Speak into your microphone, and the script will display transcribed text with se
    - Score ≥ 0.05: POSITIVE
    - Score ≤ -0.05: NEGATIVE
    - Between -0.05 and 0.05: NEUTRAL
+
+## Testing
+
+Install the dependencies (including `pytest`) and run the suite:
+```bash
+pip install -r requirements.txt
+pytest
+```
+
+The Flask app exposes a `create_app` factory, so tests can inject fake transcription and sentiment helpers without hitting external services.
 
 ## License
 

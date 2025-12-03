@@ -1,85 +1,69 @@
-# app.py
-import io
-import os
-from flask import Flask, request, jsonify
-import speech_recognition as sr
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+"""Flask application exposing the audio sentiment analysis API and UI."""
 
-app = Flask(__name__)
+from flask import Flask, current_app, jsonify, render_template, request
+from flask.typing import ResponseReturnValue
 
-# 1. Load the sentiment analysis model once (heavy operation)
-sentiment_analyzer = SentimentIntensityAnalyzer()
+from analysis import classify_sentiment, transcribe_audio_bytes
 
-# 2. Helper: transcribe audio bytes (WAV or MP3)
-def transcribe_audio(audio_bytes, language="en-US"):
-    recognizer = sr.Recognizer()
-    # Use a temporary in‑memory file
-    # sr.AudioFile accepts a filename or any file-like object; BytesIO keeps it in memory
-    with sr.AudioFile(io.BytesIO(audio_bytes)) as source:
-        audio_data = recognizer.record(source)
-    try:
-        # Google Web Speech API (free quota ~ 60 sec per request)
-        text = recognizer.recognize_google(audio_data, language=language)
-    except sr.UnknownValueError:
-        text = ""
-    except sr.RequestError as e:
-        raise RuntimeError(f"Speech API error: {e}")
-    return text
 
-# 3. Endpoint: POST /analyze
-@app.route("/analyze", methods=["POST"])
-def analyze():
-    """
-    Expects multipart/form-data with a file field named 'audio'.
-    Returns JSON: { "transcript": "...", "sentiment": {"label":"POSITIVE","score":0.99} }
-    """
-    if "audio" not in request.files:
-        return jsonify({"error": "No audio file provided"}), 400
+TRANSCRIBE_KEY = "TRANSCRIBE_AUDIO_FN"
+CLASSIFY_KEY = "CLASSIFY_SENTIMENT_FN"
 
-    audio_file = request.files["audio"]
-    if audio_file.filename == "":
-        return jsonify({"error": "Empty filename"}), 400
 
-    # Read raw bytes
-    audio_bytes = audio_file.read()
+def create_app(
+    transcribe_fn=transcribe_audio_bytes,
+    classify_fn=classify_sentiment,
+) -> Flask:
+    """App factory that supports dependency injection for easier testing."""
 
-    try:
-        transcript = transcribe_audio(audio_bytes)
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 500
+    app = Flask(__name__)
+    app.config[TRANSCRIBE_KEY] = transcribe_fn
+    app.config[CLASSIFY_KEY] = classify_fn
 
-    if not transcript:
-        return jsonify({"transcript": "", "sentiment": None, "error":"Could not transcribe audio"}), 200
+    @app.route("/analyze", methods=["POST"])
+    def analyze() -> ResponseReturnValue:
+        """Accept multipart audio uploads and return transcript plus sentiment."""
 
-    # Run sentiment analysis with VADER's compound score
-    scores = sentiment_analyzer.polarity_scores(transcript)
-    compound = scores["compound"]
-    if compound >= 0.05:
-        label = "POSITIVE"
-        confidence = compound
-    elif compound <= -0.05:
-        label = "NEGATIVE"
-        confidence = abs(compound)
-    else:
-        label = "NEUTRAL"
-        confidence = 1 - abs(compound)
+        transcribe = current_app.config[TRANSCRIBE_KEY]
+        classify = current_app.config[CLASSIFY_KEY]
 
-    sentiment = {"label": label, "score": round(confidence, 4)}
+        if "audio" not in request.files:
+            return jsonify({"error": "No audio file provided"}), 400
 
-    return jsonify({
-        "transcript": transcript,
-        "sentiment": sentiment
-    })
+        audio_file = request.files["audio"]
+        if audio_file.filename == "":
+            return jsonify({"error": "Empty filename"}), 400
 
-# 4. Simple home page for quick test
-@app.route("/")
-def index():
-    return """
-    <h1>Audio Sentiment Bot</h1>
-    <p>Send a POST request to /analyze with an audio file (WAV/MP3).</p>
-    """
+        language = (request.form.get("language") or "en-US").strip() or "en-US"
+        audio_bytes = audio_file.read()
 
-# 5. Run
+        try:
+            transcript = transcribe(audio_bytes, language=language)
+        except RuntimeError as exc:
+            payload = {"error": str(exc), "transcript": "", "sentiment": None, "language": language}
+            return jsonify(payload), 500
+
+        if not transcript:
+            payload = {
+                "transcript": "",
+                "sentiment": None,
+                "error": "Could not transcribe audio",
+                "language": language,
+            }
+            return jsonify(payload), 200
+
+        sentiment = classify(transcript)
+        return jsonify({"transcript": transcript, "sentiment": sentiment, "language": language})
+
+    @app.route("/")
+    def index():
+        return render_template("index.html")
+
+    return app
+
+
+app = create_app()
+
+
 if __name__ == "__main__":
-    # For local dev; set host=0.0.0.0 to expose
     app.run(host="0.0.0.0", port=6142, debug=True)
