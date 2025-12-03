@@ -1,0 +1,31 @@
+{
+  "name": "audio_sentiment_bot",
+  "version": "1.0.0",
+  "description": "Audio Sentiment Bot is now a zero-backend, browser-first experience. The app runs entirely on the client using WebAssembly-powered models to transcribe spoken English and predict sentiment—streamed live from your microphone or loaded from a file—without shipping audio to a server.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "serve docs",
+    "serve": "serve docs",
+    "test": "playwright test",
+    "test:ci": "playwright test --reporter=list"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rosskuehl1/audio_sentiment_bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rosskuehl1/audio_sentiment_bot/issues"
+  },
+  "homepage": "https://github.com/rosskuehl1/audio_sentiment_bot#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "serve": "^14.2.5"
+  }
+}

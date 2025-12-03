@@ -4,6 +4,14 @@ Audio Sentiment Bot is now a zero-backend, browser-first experience. The app run
 
 ![Audio Sentiment Bot UI](docs/assets/ui-preview.png)
 
+## Guitarist quick start
+
+1. Plug an electric guitar (or any line-level source) into your USB interface and pick **Electric guitar / line-in** in the Input mode selector.
+2. Tap **Start recording**. Instrument mode disables auto-gain/noise suppression so sustain, transients, and harmonic content stay intact.
+3. Watch the live sentiment gauge, energy %, confidence, and trend sparkline react every few seconds. Stop whenever you're ready and click **Analyze latest recording** to capture the full transcription in history.
+
+> Voice / acoustic sources still work great—just flip the selector to **Voice** to re-enable echo cancellation and noise suppression.
+
 ## What changed
 
 - **All client-side** – Everything runs in your browser; no Flask server, Python runtime, or API key required.
@@ -23,6 +31,18 @@ Audio Sentiment Bot is now a zero-backend, browser-first experience. The app run
    or open `docs/index.html` directly from disk in a modern Chromium or Firefox browser.
 3. Drop a short audio clip (≤ ~90 seconds) *or* click **Start recording** to begin a live stream. The first run downloads model weights and caches them locally; subsequent runs are fast and offline-friendly.
 
+## Development workflow
+
+The repo now ships with a lightweight Node toolchain for local preview + Playwright smoke tests.
+
+```bash
+npm install           # installs Playwright + serve
+npm run dev           # serves docs/ at http://127.0.0.1:3000 by default
+npm run test          # runs Playwright smoke spec against the served docs/
+```
+
+`npm run test` automatically spins up `npx serve docs` (via Playwright's `webServer` config) so you can keep iterating inside `docs/` without extra steps.
+
 ## Live streaming tips
 
 - Grant microphone access when prompted, then watch the live sentiment meter while you speak.
@@ -37,17 +57,25 @@ The project ships ready for Pages. Point your repository settings to the `docs/`
 
 Recommended checklist before publishing:
 
-1. `npx serve docs` (or equivalent) and open the served URL.
-2. Run one or two analyses to warm the model cache and confirm transcript quality.
-3. Commit changes and push to `main`. GitHub Pages will redeploy with the updated static assets.
+1. `npm run dev` (or standalone `npx serve docs`) and open the served URL.
+2. Run one or two analyses—ideally both **Voice** and **Electric guitar** modes—to warm the model cache and validate latency.
+3. `npm run test` to execute the Playwright smoke suite locally.
+4. Commit changes and push to `main`. GitHub Actions runs the same Playwright tests (`.github/workflows/ci.yml`) and must stay green before deploying to Pages.
 
 ## Project structure
 
-- `docs/index.html` – Static HTML shell.
-- `docs/assets/styles.css` – Responsive layout, live sentiment visuals, and component styling.
-- `docs/assets/app.js` – Client-side waveform rendering, live stream analysis, audio resampling, speech transcription, and sentiment scoring using `@xenova/transformers`.
+- `docs/index.html` – Static HTML shell (instrument selector, live insight chips, CI badge, waveform card, history list).
+- `docs/assets/styles.css` – Responsive layout, live sentiment visuals, instrument quick-start styling, and component tokens.
+- `docs/assets/app.js` – Client-side waveform rendering, live stream analysis, audio resampling, speech transcription, sentiment scoring, instrument-mode tuning, energy/trend analytics, and CI status fetch via GitHub API.
+- `package.json`, `playwright.config.ts`, `tests/` – Tooling + smoke tests to keep the Pages-ready bundle healthy.
 - `docs/assets/ui-preview.png` – Screenshot used in docs.
 - `positive.wav` – Sample clip for manual testing.
+
+## Testing & CI
+
+- **Local** – `npm run test` executes `tests/smoke.spec.ts`, which asserts the plug-and-play guitar workflow UI, CI badge, and instrument selector behaviors.
+- **CI** – `.github/workflows/ci.yml` installs dependencies, provisions Chromium via `npx playwright install --with-deps chromium`, runs the smoke suite, and uploads the HTML report artifact on every push & PR.
+- **Pages sync** – After CI passes, copy `docs/` into `rosskuehl1.github.io/` (or keep it symlinked) and push. The UI also surfaces CI health in the Live sentiment card, so regressions are visible to end users.
 
 ## Browser requirements
 
