@@ -3,11 +3,25 @@
 from flask import Flask, current_app, jsonify, render_template, request
 from flask.typing import ResponseReturnValue
 
-from analysis import classify_sentiment, transcribe_audio_bytes
+from analysis import analyze_audio_bytes, classify_sentiment, transcribe_audio_bytes
 
 
 TRANSCRIBE_KEY = "TRANSCRIBE_AUDIO_FN"
 CLASSIFY_KEY = "CLASSIFY_SENTIMENT_FN"
+DEFAULT_LANGUAGE = "en-US"
+LANGUAGE_CHOICES = (
+    ("en-US", "English (United States)"),
+    ("en-GB", "English (United Kingdom)"),
+    ("es-ES", "Spanish (Spain)"),
+    ("fr-FR", "French (France)"),
+    ("de-DE", "German"),
+)
+_LANGUAGE_CODES = {code for code, _ in LANGUAGE_CHOICES}
+
+
+def _normalize_language(raw_value: str | None) -> str:
+    cleaned = (raw_value or "").strip() or DEFAULT_LANGUAGE
+    return cleaned if cleaned in _LANGUAGE_CODES else DEFAULT_LANGUAGE
 
 
 def create_app(
@@ -34,13 +48,25 @@ def create_app(
         if audio_file.filename == "":
             return jsonify({"error": "Empty filename"}), 400
 
-        language = (request.form.get("language") or "en-US").strip() or "en-US"
+        language = _normalize_language(request.form.get("language"))
+        file_name = audio_file.filename
         audio_bytes = audio_file.read()
 
         try:
-            transcript = transcribe(audio_bytes, language=language)
+            transcript, sentiment = analyze_audio_bytes(
+                audio_bytes,
+                language=language,
+                transcribe_fn=transcribe,
+                classify_fn=classify,
+            )
         except RuntimeError as exc:
-            payload = {"error": str(exc), "transcript": "", "sentiment": None, "language": language}
+            payload = {
+                "error": str(exc),
+                "transcript": "",
+                "sentiment": None,
+                "language": language,
+                "fileName": file_name,
+            }
             return jsonify(payload), 500
 
         if not transcript:
@@ -49,15 +75,22 @@ def create_app(
                 "sentiment": None,
                 "error": "Could not transcribe audio",
                 "language": language,
+                "fileName": file_name,
             }
             return jsonify(payload), 200
 
-        sentiment = classify(transcript)
-        return jsonify({"transcript": transcript, "sentiment": sentiment, "language": language})
+        return jsonify(
+            {
+                "transcript": transcript,
+                "sentiment": sentiment,
+                "language": language,
+                "fileName": file_name,
+            }
+        )
 
     @app.route("/")
     def index():
-        return render_template("index.html")
+        return render_template("index.html", languages=LANGUAGE_CHOICES)
 
     return app
 

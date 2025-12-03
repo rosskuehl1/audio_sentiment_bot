@@ -44,6 +44,7 @@ def test_transcription_empty_returns_warning_without_classification():
     assert payload["transcript"] == ""
     assert payload["sentiment"] is None
     assert payload["error"] == "Could not transcribe audio"
+    assert payload["fileName"] == "clip.wav"
     assert not classify_calls
 
 
@@ -65,6 +66,7 @@ def test_successful_analysis_uses_injected_fns():
     assert response.status_code == 200
     assert payload["language"] == "en-GB"
     assert payload["sentiment"] == {"label": "POSITIVE", "score": 0.88}
+    assert payload["fileName"] == "clip.wav"
 
 
 def test_blank_language_defaults_to_en_us():
@@ -85,6 +87,27 @@ def test_blank_language_defaults_to_en_us():
     assert payload["language"] == "en-US"
     assert payload["transcript"] == "Hooray"
     assert payload["sentiment"] == {"label": "NEUTRAL", "score": 0.5}
+    assert payload["fileName"] == "clip.wav"
+
+
+def test_invalid_language_defaults_to_en_us():
+    def fake_transcribe(_audio_bytes, language="en-US"):
+        assert language == "en-US"
+        return "Testing"
+
+    def fake_classify(transcript):
+        assert transcript == "Testing"
+        return {"label": "NEUTRAL", "score": 0.51}
+
+    client = _make_client(fake_transcribe, fake_classify)
+    data = {"audio": (io.BytesIO(b"abc"), "clip.wav"), "language": "zz-ZZ"}
+    response = client.post("/analyze", data=data, content_type="multipart/form-data")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["language"] == "en-US"
+    assert payload["fileName"] == "clip.wav"
+    assert payload["sentiment"] == {"label": "NEUTRAL", "score": 0.51}
 
 
 def test_transcription_failure_is_returned_as_500():
@@ -99,3 +122,4 @@ def test_transcription_failure_is_returned_as_500():
     assert response.status_code == 500
     assert payload["error"] == "Boom"
     assert payload["sentiment"] is None
+    assert payload["fileName"] == "clip.wav"
