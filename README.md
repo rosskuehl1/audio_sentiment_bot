@@ -129,6 +129,53 @@ To sync UI changes:
 4. Verify the waveform preview and API endpoint selector still work.
 5. Commit and push to `main` in the Pages repo. GitHub Pages redeploys automatically.
 
+### Deployment Validation
+
+Before announcing a release, spin up a throwaway HTTP server and exercise the full stack:
+
+```bash
+cd audio_sentiment_bot
+AUDIO_SENTIMENT_BOT_CORS_ORIGIN=https://rosskuehl1.github.io \
+  .venv/bin/python - <<'PY'
+import json, threading, time
+import requests
+from pathlib import Path
+from werkzeug.serving import make_server
+from app import create_app
+
+origin = "https://rosskuehl1.github.io"
+app = create_app()
+app.config.update(CORS_ORIGIN=origin)
+
+server = make_server("127.0.0.1", 6142, app)
+thread = threading.Thread(target=server.serve_forever)
+thread.start()
+try:
+  time.sleep(1)
+  html = requests.get("http://127.0.0.1:6142/").text
+  assert "Waveform preview" in html
+
+  audio = Path("positive.wav").read_bytes()
+  resp = requests.post(
+    "http://127.0.0.1:6142/analyze",
+    files={"audio": ("positive.wav", audio, "audio/wav")},
+    headers={"Origin": origin},
+  )
+  resp.raise_for_status()
+  print(json.dumps(resp.json(), indent=2))
+  print("CORS:", resp.headers["Access-Control-Allow-Origin"])
+finally:
+  server.shutdown()
+  thread.join()
+PY
+```
+
+Then curl the deployed site to confirm the waveform section shipped:
+
+```bash
+curl -s https://rosskuehl1.github.io/ | grep -i "Waveform preview"
+```
+
 ### Live Microphone Streaming
 
 For real-time sentiment analysis from your microphone:

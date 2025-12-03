@@ -81,6 +81,7 @@ curl -X POST -F "audio=@clip.wav" -F "language=fr-FR" http://localhost:6142/anal
 - Replace Flask templating with static paths when copying markup and ensure waveform preview + endpoint selector remain functional.
 - The Pages script persists an API base URL in `localStorage` and always calls `<api-base>/analyze`; keep API contracts aligned.
 - Preview the Pages repo locally with `python -m http.server` before committing so GitHub Pages redeploys a tested build.
+- Validate releases by spinning up a temporary `make_server` instance (see README) that serves the Flask app, posting `positive.wav`, and verifying `Access-Control-Allow-Origin` returns your Pages URL.
 
 ## Conventions & Patterns
 
